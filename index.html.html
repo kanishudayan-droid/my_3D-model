@@ -1,0 +1,2561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PULSE-CONNECT: Autonomous Emergency Preemption 3D Digital Twin</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js (3D Simulation) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      user-select: none;
+      overflow-x: hidden;
+    }
+    .font-display {
+      font-family: 'Syne', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.6);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.85); }
+    }
+    .animate-red-glow {
+      animation: pulseGlow 1.5s infinite;
+    }
+    @keyframes greenGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(16, 185, 129, 0.8); }
+    }
+    .animate-green-glow {
+      animation: greenGlow 1.5s infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- TOP HEADER & 24H ENVIRONMENT BAR -->
+  <header class="bg-slate-900/90 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 via-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-red-600/30">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-extrabold tracking-wide text-white uppercase font-display">PULSE-CONNECT</h1>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold font-mono">DIGITAL TWIN v7.0</span>
+        </div>
+        <p class="text-[11px] text-slate-400">Autonomous Emergency Preemption &amp; Dynamic Corridor Dispatch</p>
+      </div>
+    </div>
+
+    <!-- 24H Environment Lighting Cycle Switcher -->
+    <div class="flex items-center gap-2 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+      <span class="text-[10px] text-slate-400 font-mono font-semibold px-2">24H CYCLE:</span>
+      <button onclick="setTimeOfDay('MORNING')" id="btnMorning" class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition bg-cyan-600 text-white shadow-sm">
+        🌅 Morning
+      </button>
+      <button onclick="setTimeOfDay('EVENING')" id="btnEvening" class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+        🌇 Evening
+      </button>
+      <button onclick="setTimeOfDay('NIGHT')" id="btnNight" class="px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800">
+        🌃 Night
+      </button>
+    </div>
+
+    <!-- Right Controls: Siren Toggle & Simulation Reset -->
+    <div class="flex items-center gap-2">
+      <button onclick="toggleAudio()" id="btnAudioToggle" class="px-3 py-1.5 rounded-xl text-xs font-mono font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+        <span id="audioIcon">🔊</span>
+        <span id="audioStatusText">SIREN: UNMUTED</span>
+      </button>
+      <button onclick="resetSimulation()" class="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-rose-600/90 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 transition flex items-center gap-1.5">
+        <span>🔄</span> Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN SIMULATION WORKSPACE -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden relative">
+    
+    <!-- 3D WebGL Canvas Viewport (8 Cols) -->
+    <div class="lg:col-span-8 relative bg-slate-950 h-[58vh] lg:h-[calc(100vh-62px)] flex flex-col overflow-hidden">
+      
+      <!-- 3D Canvas element -->
+      <canvas id="webglCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+      <!-- CAMERA DIRECTING STRIP OVERLAY -->
+      <div class="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5 bg-slate-900/85 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-xl">
+        <span class="text-[10px] text-slate-400 font-mono font-bold px-2 py-1 flex items-center">🎥 POV:</span>
+        <button onclick="setCameraMode('CRASH_SCENE')" id="camCrashBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition bg-cyan-600 text-white shadow-sm">1. Crash Site</button>
+        <button onclick="setCameraMode('CHASE')" id="camChaseBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">2. Chase Cam</button>
+        <button onclick="setCameraMode('PROTEST')" id="camProtestBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">3. Protest Rally</button>
+        <button onclick="setCameraMode('SCHOOL')" id="camSchoolBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">4. School &amp; Market</button>
+        <button onclick="setCameraMode('SIGNAL')" id="camSignalBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">5. Signal Checkpoint</button>
+        <button onclick="setCameraMode('HOSPITAL')" id="camHospitalBtn" class="px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">6. Hospital ER</button>
+      </div>
+
+      <!-- LIVE CAD HUD OVERLAY -->
+      <div class="absolute top-16 left-3 z-10 bg-slate-900/90 border border-cyan-500/30 backdrop-blur-md rounded-2xl p-3 max-w-xs shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+          <span class="text-[10px] font-mono font-extrabold text-cyan-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span> CAD SECURE TELEMETRY
+          </span>
+          <span id="transitBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold font-mono">STANDBY</span>
+        </div>
+        <div class="space-y-1 text-[11px] font-mono">
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">CORRIDOR DIST:</span>
+            <span id="hudDistance" class="font-bold text-white">950 m</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">SPEED (MPH/KMH):</span>
+            <span id="hudSpeed" class="font-bold text-amber-400">0.0 km/h</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">SIGNAL STATE:</span>
+            <span id="hudSignal" class="font-bold text-red-500">MUNICIPAL RED</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">COB LINK:</span>
+            <span id="hudCobStatus" class="font-bold text-rose-400">NOT DISPATCHED</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">POLICE TOKEN:</span>
+            <span id="hudPoliceStatus" class="font-bold text-amber-400">AWAITING SCAN</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span class="text-slate-500">PATIENT STATUS:</span>
+            <span id="hudVitals" class="font-bold text-rose-400">PEDESTRIAN AT CROSSWALK</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BANNER 1: Crash Incident Alert Banner -->
+      <div id="crashIncidentBanner" class="hidden absolute top-16 right-3 z-20 max-w-sm bg-rose-950/95 border-2 border-rose-500 p-3.5 rounded-2xl backdrop-blur-md shadow-2xl animate-pulse">
+        <div class="flex items-start gap-3">
+          <span class="text-3xl">💥</span>
+          <div class="text-xs">
+            <div class="font-extrabold text-rose-300 text-sm flex items-center justify-between font-display">
+              <span>VEHICLE CRASH ACCIDENT</span>
+              <span class="text-[10px] bg-rose-600 px-2 py-0.5 rounded text-white font-mono font-bold">CODE RED</span>
+            </div>
+            <p class="text-slate-200 text-xs mt-1 leading-snug">Civilian sedan struck pedestrian at crosswalk KM 0.95! Paramedics deploy gurney to place patient in supine resting format alongside cryogenic organ carrier.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- BANNER 2: Signal Police Checkpoint Notification -->
+      <div id="signalPoliceBanner" class="hidden absolute top-28 right-3 z-20 max-w-sm bg-blue-950/90 border border-blue-400 p-3 rounded-2xl backdrop-blur-md shadow-2xl">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">👮‍♂️</span>
+          <div class="text-xs">
+            <div class="font-bold text-blue-300 font-display">POLICE CHECKPOINT VERIFICATION</div>
+            <p class="text-slate-300 text-[11px] leading-snug">Officer verified CAD digital token. Confirmed authenticated organ donation run. Intersecting cross-traffic latched to STOP.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- BANNER 3: Hospital Arrival Alert Banner with Doctor Appreciation -->
+      <div id="hospitalLinkAlertBanner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-xl bg-cyan-950/95 border-2 border-cyan-400 p-4 rounded-2xl backdrop-blur-md shadow-2xl animate-pulse">
+        <div class="flex items-center gap-3.5">
+          <div class="w-12 h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white text-2xl flex-shrink-0">👨‍⚕️</div>
+          <div class="flex-1 text-xs">
+            <div class="font-extrabold text-cyan-300 text-sm flex items-center justify-between font-display">
+              <span>CHIEF SURGEON DR. ARVIND • EMERGENCY BAY</span>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">DELIVERED SAFELY</span>
+            </div>
+            <p class="text-emerald-300 font-bold text-sm mt-1">"Thank you team for the great job! The patient and donor organ have arrived safely on time for immediate surgery!"</p>
+            <p class="text-slate-400 text-[11px] mt-0.5">Transplant OT-1 Scrubbed In • Golden Hour Preserved via Preemption.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- POLICE TABLET APPROVAL MODAL AT SIGNAL (Z = 0) -->
+      <div id="policeTabletModal" class="hidden absolute inset-0 z-40 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-cyan-400 rounded-3xl p-5 max-w-md w-full shadow-2xl relative animate-green-glow">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
+              <span class="text-xs font-mono font-extrabold text-cyan-300">POLICE CHECKPOINT SCANNER TABLET</span>
+            </div>
+            <span class="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-500/40 px-2 py-0.5 rounded-full font-mono">TOKEN: CAD-8921</span>
+          </div>
+          <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs font-mono">
+            <div class="text-slate-400">VEHICLE ID: <span class="text-white font-bold">AMB-108 (Type-III Paramedic)</span></div>
+            <div class="text-slate-400">PRIORITY LEVEL: <span class="text-rose-400 font-extrabold">CRITICAL ORGAN TRANSIT</span></div>
+            <div class="text-slate-400">TARGET OT: <span class="text-emerald-400 font-bold">City General Hospital Trauma Bay</span></div>
+            <div class="text-slate-400">HASH VERIFICATION: <span class="text-cyan-300">SHA-256 VALIDATED ✓</span></div>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button onclick="approveSignalPoliceLinkAction()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs font-mono transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2">
+              <span>✓</span> APPROVE PREEMPTION &amp; LATCH GREEN
+            </button>
+            <button onclick="document.getElementById('policeTabletModal').classList.add('hidden')" class="px-3 py-2.5 rounded-xl bg-slate-800 text-slate-400 text-xs font-mono">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FINAL CONCLUSION MODAL: The PULSE-CONNECT Value Proposition -->
+      <div id="conclusionModal" class="hidden absolute inset-0 z-40 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 max-w-2xl w-full shadow-2xl relative overflow-hidden animate-green-glow">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-base font-bold">✓</span>
+              <div>
+                <h3 class="text-base font-extrabold text-white">MISSION SUCCESSFUL: GOLDEN HOUR PRESERVED</h3>
+                <p class="text-xs text-emerald-400 font-mono">PULSE-CONNECT Autonomous Preemption Complete</p>
+              </div>
+            </div>
+            <button onclick="document.getElementById('conclusionModal').classList.add('hidden')" class="text-slate-400 hover:text-white text-xs font-mono px-2 py-1 bg-slate-800 rounded-lg">✕ Close</button>
+          </div>
+
+          <div class="space-y-3.5 text-xs text-slate-300">
+            <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3.5">
+              <h4 class="text-emerald-300 font-bold text-sm mb-1 font-display">Core Conclusion: Instant Emergency Traffic Clearance</h4>
+              <p class="text-slate-200 leading-relaxed">
+                <strong class="text-white">PULSE-CONNECT</strong> proves that emergency transit bottlenecks cannot be solved with sirens alone. By instantly transmitting an authenticated digital access link from our app directly to the <strong>City Operations Bureau (COB)</strong> and <strong>Traffic Police</strong>, authorities are notified and clear the road before arrival.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-cyan-400 font-mono font-bold text-[11px] mb-1">1. INSTANT LINK DISPATCH</div>
+                <p class="text-slate-400 text-[11px] leading-snug">Ambulance driver shares encrypted CAD token with one tap. COB approves corridor on mobile terminal.</p>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-amber-400 font-mono font-bold text-[11px] mb-1">2. PROACTIVE CLEARANCE</div>
+                <p class="text-slate-400 text-[11px] leading-snug">Roadside COB Marshals, protest dispersal orders, and school crowd controls clear obstacles 400m ahead.</p>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-emerald-400 font-mono font-bold text-[11px] mb-1">3. SUB-250ms PREEMPTION</div>
+                <p class="text-slate-400 text-[11px] leading-snug">Traffic signals latch to green automatically. Zero collision hazard, zero backpressure, on-time delivery.</p>
+              </div>
+            </div>
+
+            <div class="bg-slate-800/60 p-3 rounded-xl flex items-center justify-between text-xs font-mono text-slate-300">
+              <span>OVERALL TRAVEL DELAY REDUCTION:</span>
+              <span class="text-emerald-400 font-extrabold text-sm">71.2% FASTER (SUMO BENCHMARK)</span>
+            </div>
+          </div>
+
+          <div class="mt-5 flex gap-2.5">
+            <button onclick="resetSimulation()" class="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition shadow-md">
+              🔄 Replay Simulation From Crash Scene
+            </button>
+            <button onclick="document.getElementById('conclusionModal').classList.add('hidden')" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition">
+              Inspect 3D Environment
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Distance Scrub Slider (Bottom overlay) -->
+      <div class="absolute bottom-3 inset-x-3 z-10 bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-xl">
+        <div class="flex items-center justify-between text-xs font-mono mb-1.5 text-slate-300">
+          <span class="flex items-center gap-1.5 font-bold text-white">
+            <span>📍 CORRIDOR TIMELINE:</span>
+            <span id="sliderLabel" class="text-cyan-400">950m (Crash Site)</span>
+          </span>
+          <span class="text-[11px] text-slate-400">Milestones: Crash 950m → Protest 720m → Crowd 480m → Signal 0m → Hospital -220m</span>
+        </div>
+        <input type="range" id="distanceSlider" min="-220" max="950" value="950" step="1" oninput="onScrubDistance(this.value)" class="w-full accent-cyan-500 cursor-pointer">
+      </div>
+    </div>
+
+    <!-- RIGHT INTERACTIVE CONTROL CONSOLE (4 Cols) -->
+    <div class="lg:col-span-4 bg-slate-900 border-l border-slate-800 flex flex-col h-[42vh] lg:h-[calc(100vh-62px)] overflow-y-auto p-4 space-y-4">
+      
+      <!-- STEP 1: CAR CRASH & RESCUE SEQUENCE -->
+      <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2.5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-rose-400 font-mono flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-rose-500/20 flex items-center justify-center text-[10px]">1</span>
+            CRASH ACCIDENT &amp; PATIENT RESCUE
+          </span>
+          <span id="crashStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">READY</span>
+        </div>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Trigger live collision: civilian sedan hits pedestrian at crosswalk. Paramedics deploy gurney and place patient in horizontal supine format before loading into the ambulance.
+        </p>
+        <button onclick="playCrashAndLoadSequence()" id="btnPlayCrash" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs font-mono transition shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2">
+          <span>💥</span> <span id="loadPatientBtnText">PLAY CRASH &amp; LOAD PATIENT</span>
+        </button>
+      </div>
+
+      <!-- STEP 2: AMBULANCE DRIVER LINK DISPATCH TO COB -->
+      <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2.5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-cyan-400 font-mono flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px]">2</span>
+            COB ACCESS LINK TRANSMISSION
+          </span>
+          <span id="linkBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">LOCKED</span>
+        </div>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Ambulance driver shares encrypted CAD access token with City Operations Bureau (COB) to request urgent corridor clearance.
+        </p>
+        <button onclick="sendAccessLinkToCob()" id="btnSendCobLink" disabled class="w-full py-2.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs font-mono transition cursor-not-allowed flex items-center justify-center gap-2">
+          <span>📲</span> <span>SEND ACCESS LINK TO COB PHONE</span>
+        </button>
+      </div>
+
+      <!-- SIMULATED COB OFFICER MOBILE TERMINAL (Interactive approval modal) -->
+      <div id="cobMobileModal" class="hidden bg-slate-900 border-2 border-cyan-400/80 rounded-2xl p-3.5 space-y-2 shadow-2xl animate-green-glow">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="text-xs font-mono font-extrabold text-cyan-300">COB DUTY OFFICER TERMINAL</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono">PHONE: +91 98450 11099</span>
+        </div>
+        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs font-mono space-y-1">
+          <div class="text-slate-400">INCOMING LINK: <span class="text-cyan-300 font-bold">https://pulse-cob.gov.in/auth/cad-8921</span></div>
+          <div class="text-slate-400">VEHICLE: <span class="text-white">AMB-108 (Type-III Paramedic)</span></div>
+          <div class="text-slate-400">MISSION: <span class="text-rose-400 font-bold">CODE RED • ORGAN DONATION TRANSIT</span></div>
+          <div class="text-slate-400">DESTINATION: <span class="text-emerald-400 font-bold">City General Hospital Trauma Bay</span></div>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button onclick="approveCobLinkAction()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs font-mono transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5">
+            <span>✓</span> APPROVE LINK &amp; ALERT MARSHALS
+          </button>
+          <button onclick="rejectCobLinkAction()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-mono transition">
+            Reject
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 3: MANUAL USER-CONTROLLED TRANSIT & GATES -->
+      <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2.5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-amber-400 font-mono flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[10px]">3</span>
+            MANUAL AMBULANCE DRIVE &amp; OBSTACLE GATES
+          </span>
+          <span id="driveStateBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">STANDBY</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="toggleManualDriving()" id="btnDriveToggle" disabled class="py-2.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs font-mono transition cursor-not-allowed flex items-center justify-center gap-1.5">
+            <span>▶</span> <span id="driveBtnLabel">START DRIVE</span>
+          </button>
+          <button onclick="stepForwardDistance(50)" id="btnStepDrive" disabled class="py-2.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs font-mono transition cursor-not-allowed flex items-center justify-center gap-1.5">
+            <span>⏩</span> <span>STEP +50m</span>
+          </button>
+        </div>
+
+        <!-- Dynamic Clearance Action Cards for Each Milestone -->
+        <div class="space-y-2 pt-1">
+          <!-- Gate 1: Protest Rally (720m) -->
+          <div id="gateProtestCard" class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+            <div class="text-xs">
+              <div class="font-bold text-slate-300">1. Political Protest Rally (720m)</div>
+              <div id="gateProtestStatus" class="text-[11px] text-amber-400">COB Marshals clearing way</div>
+            </div>
+            <button onclick="clearProtestGateAction()" id="btnGateProtest" class="px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-xs font-bold transition">
+              Clear Protest
+            </button>
+          </div>
+
+          <!-- Gate 2: School & Supermarket Crowd (480m) -->
+          <div id="gateCrowdCard" class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+            <div class="text-xs">
+              <div class="font-bold text-slate-300">2. School &amp; Market Crowd (480m)</div>
+              <div id="gateCrowdStatus" class="text-[11px] text-amber-400">Students &amp; shoppers crossing</div>
+            </div>
+            <button onclick="clearCrowdGateAction()" id="btnGateCrowd" class="px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-xs font-bold transition">
+              Disperse Crowd
+            </button>
+          </div>
+
+          <!-- Gate 3: Traffic Signal & Police Checkpoint (0m) -->
+          <div id="gateSignalCard" class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+            <div class="text-xs">
+              <div class="font-bold text-slate-300">3. Signal Police Checkpoint (0m)</div>
+              <div id="gateSignalStatus" class="text-[11px] text-amber-400 font-mono">Inspect CAD link on tablet</div>
+            </div>
+            <button onclick="openSignalPoliceModal()" id="btnGateSignal" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-md shadow-cyan-600/30">
+              Inspect Link
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIT LOG TERMINAL -->
+      <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 flex-1 flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+          <span class="text-xs font-bold font-mono text-slate-400">AUDIT LOG &amp; COB EVENT STREAM</span>
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        </div>
+        <div id="auditLog" class="text-[11px] font-mono space-y-1 text-slate-400 overflow-y-auto max-h-36 pr-1">
+          <div>[00:00:00] PULSE-CONNECT Digital Twin initialized. Standby at KM 0.95.</div>
+          <div>[00:00:01] 24H Lighting set to MORNING. Scene ready.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- JAVASCRIPT ENGINE -->
+  <script>
+    /* =========================================================================
+       PULSE-CONNECT 3D DIGITAL TWIN ENGINE
+       Self-contained Three.js simulation, kinematics, Web Audio, and COB bridge
+       ========================================================================= */
+
+    const CRASH_Z = 950;
+    const PROTEST_Z = 720;
+    const CROWD_Z = 480;
+    const SIGNAL_Z = 0;
+    const STOPLINE_Z = 0;
+    const HOSPITAL_Z = -220;
+
+    // Simulation Global State
+    const STATE = {
+      ambulance: {
+        distanceMeters: CRASH_Z,
+        speedKmh: 0,
+        sirenActive: false,
+        patientLoaded: false,
+        organLoaded: false
+      },
+      cob: {
+        linkSent: false,
+        linkApproved: false,
+        marshalsActive: false,
+        token: "CAD-2026-BLR-8921"
+      },
+      gates: {
+        protestCleared: false,
+        crowdCleared: false,
+        signalAuthorized: false
+      },
+      signal: {
+        state: 'RED',
+        timer: 0
+      },
+      crashSequence: {
+        active: false,
+        stage: 'STANDBY',
+        timer: 0
+      },
+      hospitalSequence: {
+        speechSpoken: false,
+        modalTriggered: false
+      },
+      timeOfDay: 'MORNING',
+      cameraMode: 'CRASH_SCENE',
+      audioMuted: false
+    };
+
+    const USER_GATE = {
+      isManualDriving: false,
+      targetSpeed: 0
+    };
+
+    // Three.js Scene Variables
+    let scene, camera, renderer, controls;
+    let dirLight, hemiLight, skyMesh;
+    let ambulanceMesh, ambulanceBeaconL, ambulanceBeaconR;
+    let ambulanceWheelMeshes = [];
+    let crashCivilianCar, pedestrianVictim, paramedicGurneyMesh, donorOrganBoxMesh;
+    let supinePatientMesh = null;
+    let paramedic1Mesh, paramedic2Mesh;
+    let signalGantryGroup, lightRedMesh, lightAmberMesh, lightGreenMesh, signalLightGlow;
+    let civilianCars = [];
+    let cobMarshalsSquad = [];
+    let protestCrowdGroup = [];
+    let schoolCrowdGroup = [];
+    let hospitalBuildingMesh, hospitalChiefDoctorMesh, doctorRightArm;
+    let signalPoliceCarMesh, signalPoliceOfficerMesh, signalPoliceBeaconL, signalPoliceBeaconR;
+
+    const simulationClock = new THREE.Clock();
+
+    // =========================================================================
+    // AUDIO ENGINE (Web Audio API Synthesizers)
+    // =========================================================================
+    let audioCtx = null;
+    let sirenOsc1 = null, sirenOsc2 = null, sirenGain = null, sirenLfo = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function startSirenSound() {
+      if (STATE.audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      if (sirenOsc1) return;
+
+      try {
+        sirenGain = audioCtx.createGain();
+        sirenGain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        sirenGain.connect(audioCtx.destination);
+
+        sirenOsc1 = audioCtx.createOscillator();
+        sirenOsc1.type = 'sawtooth';
+        sirenOsc1.frequency.setValueAtTime(650, audioCtx.currentTime);
+
+        sirenOsc2 = audioCtx.createOscillator();
+        sirenOsc2.type = 'triangle';
+        sirenOsc2.frequency.setValueAtTime(654, audioCtx.currentTime);
+
+        sirenLfo = audioCtx.createOscillator();
+        sirenLfo.frequency.setValueAtTime(0.75, audioCtx.currentTime);
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.setValueAtTime(160, audioCtx.currentTime);
+
+        sirenLfo.connect(lfoGain);
+        lfoGain.connect(sirenOsc1.frequency);
+        lfoGain.connect(sirenOsc2.frequency);
+
+        sirenOsc1.connect(sirenGain);
+        sirenOsc2.connect(sirenGain);
+
+        sirenLfo.start();
+        sirenOsc1.start();
+        sirenOsc2.start();
+      } catch (e) {
+        console.warn("Audio Context init prevented by browser policy", e);
+      }
+    }
+
+    function stopSirenSound() {
+      try {
+        if (sirenOsc1) { sirenOsc1.stop(); sirenOsc1.disconnect(); sirenOsc1 = null; }
+        if (sirenOsc2) { sirenOsc2.stop(); sirenOsc2.disconnect(); sirenOsc2 = null; }
+        if (sirenLfo) { sirenLfo.stop(); sirenLfo.disconnect(); sirenLfo = null; }
+        if (sirenGain) { sirenGain.disconnect(); sirenGain = null; }
+      } catch (e) {}
+    }
+
+    function toggleAudio() {
+      STATE.audioMuted = !STATE.audioMuted;
+      const statusText = document.getElementById('audioStatusText');
+      const icon = document.getElementById('audioIcon');
+      if (STATE.audioMuted) {
+        stopSirenSound();
+        if (statusText) statusText.innerText = "SIREN: MUTED";
+        if (icon) icon.innerText = "🔇";
+      } else {
+        if (statusText) statusText.innerText = "SIREN: UNMUTED";
+        if (icon) icon.innerText = "🔊";
+        if (STATE.ambulance.sirenActive) startSirenSound();
+      }
+    }
+
+    function playTireScreechSound() {
+      if (STATE.audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1400, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(320, audioCtx.currentTime + 0.65);
+        gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.65);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.68);
+      } catch (e) {}
+    }
+
+    function playCrashImpactSound() {
+      if (STATE.audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(28, audioCtx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.52);
+      } catch (e) {}
+    }
+
+    function playNotificationChirp(freq = 880) {
+      if (STATE.audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+      } catch (e) {}
+    }
+
+    function playDoctorSuccessFanfare() {
+      if (STATE.audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          const t = audioCtx.currentTime + idx * 0.12;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.2, t);
+          gain.gain.linearRampToValueAtTime(0.01, t + 0.4);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(t);
+          osc.stop(t + 0.45);
+        });
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 3D SCENE SETUP & PROCEDURAL MODELS
+    // =========================================================================
+    function initThreeEngine() {
+      const container = document.getElementById('webglCanvas');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x090d16);
+      scene.fog = new THREE.FogExp2(0x090d16, 0.0016);
+
+      const aspect = container.clientWidth / container.clientHeight;
+      camera = new THREE.PerspectiveCamera(50, aspect, 0.5, 3000);
+      camera.position.set(7.5, 3.6, CRASH_Z + 18);
+
+      renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      if (typeof THREE.OrbitControls !== 'undefined') {
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 250;
+        controls.minDistance = 3;
+        controls.target.set(1.5, 1.1, CRASH_Z + 9);
+      }
+
+      buildEnvironmentLighting();
+      buildRealisticSkyDome();
+      buildRoadway();
+      buildBuildings();
+      buildCrashSite3D();
+      buildAmbulance3D();
+      buildCivilianCars3D();
+      buildPoliticianProtest3D();
+      buildSchoolAndSupermarket3D();
+      buildTrafficSignalGantry3D();
+      buildSignalPoliceCheckpoint3D();
+      buildCobMarshalsSquad3D();
+      buildHospital3D();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function buildEnvironmentLighting() {
+      hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, 0.7);
+      hemiLight.position.set(0, 100, 0);
+      scene.add(hemiLight);
+
+      dirLight = new THREE.DirectionalLight(0xfff7ed, 1.4);
+      dirLight.position.set(45, 120, 60);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 10;
+      dirLight.shadow.camera.far = 400;
+      const d = 160;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      scene.add(dirLight);
+    }
+
+    function buildRealisticSkyDome() {
+      const skyGeo = new THREE.SphereGeometry(1400, 32, 24);
+      const skyMat = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.BackSide });
+      skyMesh = new THREE.Mesh(skyGeo, skyMat);
+      scene.add(skyMesh);
+    }
+
+    function buildRoadway() {
+      const roadGeo = new THREE.PlaneGeometry(16, 1400);
+      const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 });
+      const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+      roadMesh.rotation.x = -Math.PI / 2;
+      roadMesh.position.set(0, 0, 365);
+      roadMesh.receiveShadow = true;
+      scene.add(roadMesh);
+
+      const medianGeo = new THREE.PlaneGeometry(0.3, 1400);
+      const medianMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+      const medianMesh = new THREE.Mesh(medianGeo, medianMat);
+      medianMesh.rotation.x = -Math.PI / 2;
+      medianMesh.position.set(0, 0.02, 365);
+      scene.add(medianMesh);
+
+      const walkGeo = new THREE.BoxGeometry(6, 0.35, 1400);
+      const walkMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9 });
+      const walkL = new THREE.Mesh(walkGeo, walkMat);
+      walkL.position.set(-11, 0.17, 365);
+      scene.add(walkL);
+
+      const walkR = walkL.clone();
+      walkR.position.x = 11;
+      scene.add(walkR);
+
+      function addZebraCrosswalk(zPos) {
+        for (let i = -7; i <= 7; i += 1.4) {
+          const stripe = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.7, 4.2),
+            new THREE.MeshBasicMaterial({ color: 0xf8fafc })
+          );
+          stripe.rotation.x = -Math.PI / 2;
+          stripe.position.set(i, 0.03, zPos);
+          scene.add(stripe);
+        }
+      }
+      addZebraCrosswalk(CRASH_Z + 10);
+      addZebraCrosswalk(CROWD_Z);
+      addZebraCrosswalk(STOPLINE_Z + 2);
+    }
+
+    function buildBuildings() {
+      const bldgMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.2 });
+      for (let z = 1000; z >= -280; z -= 55) {
+        const hL = 20 + Math.random() * 40;
+        const bL = new THREE.Mesh(new THREE.BoxGeometry(18, hL, 38), bldgMat);
+        bL.position.set(-24, hL / 2, z);
+        bL.castShadow = true;
+        scene.add(bL);
+
+        const hR = 20 + Math.random() * 40;
+        const bR = new THREE.Mesh(new THREE.BoxGeometry(18, hR, 38), bldgMat);
+        bR.position.set(24, hR / 2, z);
+        bR.castShadow = true;
+        scene.add(bR);
+      }
+    }
+
+    // AUTOMOTIVE WHEEL WITH DISC BRAKES & ROTATING SPOKES
+    function createAutomotiveWheel(isDual = false, radius = 0.42) {
+      const wheelGroup = new THREE.Group();
+      const tireWidth = isDual ? 0.48 : 0.26;
+
+      const tireGeo = new THREE.CylinderGeometry(radius, radius, tireWidth, 28);
+      const tireMat = new THREE.MeshStandardMaterial({
+        color: 0x141416,
+        roughness: 0.92,
+        metalness: 0.08
+      });
+      const tire = new THREE.Mesh(tireGeo, tireMat);
+      tire.rotation.z = Math.PI / 2;
+      tire.castShadow = true;
+      wheelGroup.add(tire);
+
+      const rimMat = new THREE.MeshStandardMaterial({
+        color: 0xdfebf6,
+        metalness: 0.94,
+        roughness: 0.15
+      });
+      const rim = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 0.68, radius * 0.68, tireWidth + 0.015, 20),
+        rimMat
+      );
+      rim.rotation.z = Math.PI / 2;
+      wheelGroup.add(rim);
+
+      const hubMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9 });
+      const hub = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 0.26, radius * 0.26, tireWidth + 0.03, 16),
+        hubMat
+      );
+      hub.rotation.z = Math.PI / 2;
+      wheelGroup.add(hub);
+
+      for (let s = 0; s < 5; s++) {
+        const spoke = new THREE.Mesh(
+          new THREE.BoxGeometry(radius * 0.06, radius * 0.48, tireWidth + 0.02),
+          rimMat
+        );
+        spoke.rotation.x = (s * Math.PI * 2) / 5;
+        wheelGroup.add(spoke);
+      }
+
+      return wheelGroup;
+    }
+
+    // REALISTIC TYPE-III PARAMEDIC AMBULANCE
+    function buildAmbulance3D() {
+      ambulanceMesh = new THREE.Group();
+      ambulanceWheelMeshes = [];
+
+      const ambBodyMat = new THREE.MeshStandardMaterial({
+        color: 0xfafafa,
+        metalness: 0.12,
+        roughness: 0.2
+      });
+
+      const undercarriage = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 0.3, 6.2),
+        new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 })
+      );
+      undercarriage.position.set(0, 0.42, 0);
+      ambulanceMesh.add(undercarriage);
+
+      const patientBox = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 2.35, 4.35),
+        ambBodyMat
+      );
+      patientBox.position.set(0, 1.62, 0.88);
+      patientBox.castShadow = true;
+      patientBox.receiveShadow = true;
+      ambulanceMesh.add(patientBox);
+
+      const cabBase = new THREE.Mesh(
+        new THREE.BoxGeometry(2.32, 1.45, 2.05),
+        ambBodyMat
+      );
+      cabBase.position.set(0, 1.18, -2.05);
+      ambulanceMesh.add(cabBase);
+
+      const hood = new THREE.Mesh(
+        new THREE.BoxGeometry(2.26, 0.42, 1.35),
+        ambBodyMat
+      );
+      hood.position.set(0, 0.98, -2.78);
+      hood.rotation.x = 0.08;
+      ambulanceMesh.add(hood);
+
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x050b14,
+        roughness: 0.05,
+        metalness: 0.95
+      });
+      const windshield = new THREE.Mesh(
+        new THREE.BoxGeometry(2.18, 0.92, 0.95),
+        glassMat
+      );
+      windshield.position.set(0, 1.62, -2.36);
+      windshield.rotation.x = -Math.PI / 8;
+      ambulanceMesh.add(windshield);
+
+      const grille = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.56, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.3 })
+      );
+      grille.position.set(0, 0.72, -3.46);
+      ambulanceMesh.add(grille);
+
+      // Battenburg High-Vis Chevrons
+      const battenburgYellow = new THREE.MeshBasicMaterial({ color: 0xeab308 });
+      const battenburgGreen = new THREE.MeshBasicMaterial({ color: 0x16a34a });
+
+      for (let b = 0; b < 6; b++) {
+        const mat = b % 2 === 0 ? battenburgYellow : battenburgGreen;
+        const squareL = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.42), mat);
+        squareL.position.set(-1.215, 1.25, -0.7 + b * 0.65);
+        squareL.rotation.y = -Math.PI / 2;
+        ambulanceMesh.add(squareL);
+
+        const squareR = squareL.clone();
+        squareR.position.x = 1.215;
+        squareR.rotation.y = Math.PI / 2;
+        ambulanceMesh.add(squareR);
+      }
+
+      // Red Medical Crosses
+      const crossMat = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
+      const crossHorizL = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.32), crossMat);
+      crossHorizL.position.set(-1.216, 2.05, 0.85);
+      crossHorizL.rotation.y = -Math.PI / 2;
+      ambulanceMesh.add(crossHorizL);
+
+      const crossVertL = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.92), crossMat);
+      crossVertL.position.set(-1.216, 2.05, 0.85);
+      crossVertL.rotation.y = -Math.PI / 2;
+      ambulanceMesh.add(crossVertL);
+
+      const crossHorizR = crossHorizL.clone();
+      crossHorizR.position.x = 1.216;
+      crossHorizR.rotation.y = Math.PI / 2;
+      ambulanceMesh.add(crossHorizR);
+
+      const crossVertR = crossVertL.clone();
+      crossVertR.position.x = 1.216;
+      crossVertR.rotation.y = Math.PI / 2;
+      ambulanceMesh.add(crossVertR);
+
+      // Beacons & Headlights
+      ambulanceBeaconL = new THREE.PointLight(0xff0033, 0, 25);
+      ambulanceBeaconL.position.set(-0.7, 3.1, -1.82);
+      ambulanceMesh.add(ambulanceBeaconL);
+
+      ambulanceBeaconR = new THREE.PointLight(0x0066ff, 0, 25);
+      ambulanceBeaconR.position.set(0.7, 3.1, -1.82);
+      ambulanceMesh.add(ambulanceBeaconR);
+
+      const forwardLight = new THREE.SpotLight(0xffffff, 2.4, 65, Math.PI / 5, 0.35);
+      forwardLight.position.set(0, 0.85, -3.4);
+      forwardLight.target.position.set(0, 0, -35);
+      ambulanceMesh.add(forwardLight);
+      ambulanceMesh.add(forwardLight.target);
+
+      // Rotating Alloy Wheels
+      const fWheelL = createAutomotiveWheel(false, 0.43);
+      fWheelL.position.set(-1.18, 0.43, -1.88);
+      ambulanceMesh.add(fWheelL);
+      ambulanceWheelMeshes.push(fWheelL);
+
+      const fWheelR = createAutomotiveWheel(false, 0.43);
+      fWheelR.position.set(1.18, 0.43, -1.88);
+      ambulanceMesh.add(fWheelR);
+      ambulanceWheelMeshes.push(fWheelR);
+
+      const rWheelL = createAutomotiveWheel(true, 0.45);
+      rWheelL.position.set(-1.22, 0.45, 1.82);
+      ambulanceMesh.add(rWheelL);
+      ambulanceWheelMeshes.push(rWheelL);
+
+      const rWheelR = createAutomotiveWheel(true, 0.45);
+      rWheelR.position.set(1.22, 0.45, 1.82);
+      ambulanceMesh.add(rWheelR);
+      ambulanceWheelMeshes.push(rWheelR);
+
+      ambulanceMesh.position.set(0, 0, CRASH_Z);
+      scene.add(ambulanceMesh);
+    }
+
+    // REALISTIC CIVILIAN CAR BUILDER
+    function createRealisticCivilianCar(colorHex) {
+      const car = new THREE.Group();
+
+      const carPaintMat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        metalness: 0.85,
+        roughness: 0.18
+      });
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x080f1a,
+        roughness: 0.05,
+        metalness: 0.95
+      });
+      const trimMat = new THREE.MeshStandardMaterial({
+        color: 0x1f2937,
+        roughness: 0.7,
+        metalness: 0.4
+      });
+
+      const lowerBody = new THREE.Mesh(
+        new THREE.BoxGeometry(2.05, 0.55, 4.6),
+        carPaintMat
+      );
+      lowerBody.position.y = 0.55;
+      lowerBody.castShadow = true;
+      car.add(lowerBody);
+
+      const hood = new THREE.Mesh(
+        new THREE.BoxGeometry(1.98, 0.28, 1.45),
+        carPaintMat
+      );
+      hood.position.set(0, 0.85, -1.35);
+      hood.rotation.x = 0.06;
+      car.add(hood);
+
+      const cabinRoof = new THREE.Mesh(
+        new THREE.BoxGeometry(1.72, 0.62, 2.25),
+        carPaintMat
+      );
+      cabinRoof.position.set(0, 1.25, 0.15);
+      car.add(cabinRoof);
+
+      const windshield = new THREE.Mesh(
+        new THREE.BoxGeometry(1.68, 0.72, 0.82),
+        glassMat
+      );
+      windshield.position.set(0, 1.15, -0.85);
+      windshield.rotation.x = -Math.PI / 6.5;
+      car.add(windshield);
+
+      const rearGlass = new THREE.Mesh(
+        new THREE.BoxGeometry(1.68, 0.68, 0.78),
+        glassMat
+      );
+      rearGlass.position.set(0, 1.16, 1.12);
+      rearGlass.rotation.x = Math.PI / 7;
+      car.add(rearGlass);
+
+      const headlampMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const hLampL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.16, 0.08), headlampMat);
+      hLampL.position.set(-0.72, 0.72, -2.32);
+      car.add(hLampL);
+
+      const hLampR = hLampL.clone();
+      hLampR.position.x = 0.72;
+      car.add(hLampR);
+
+      const tailLightBar = new THREE.Mesh(
+        new THREE.BoxGeometry(1.78, 0.12, 0.06),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      );
+      tailLightBar.position.set(0, 0.78, 2.32);
+      car.add(tailLightBar);
+
+      const fWheelL = createAutomotiveWheel(false, 0.36);
+      fWheelL.position.set(-1.02, 0.36, -1.35);
+      car.add(fWheelL);
+
+      const fWheelR = createAutomotiveWheel(false, 0.36);
+      fWheelR.position.set(1.02, 0.36, -1.35);
+      car.add(fWheelR);
+
+      const rWheelL = createAutomotiveWheel(false, 0.36);
+      rWheelL.position.set(-1.02, 0.36, 1.35);
+      car.add(rWheelL);
+
+      const rWheelR = createAutomotiveWheel(false, 0.36);
+      rWheelR.position.set(1.02, 0.36, 1.35);
+      car.add(rWheelR);
+
+      return car;
+    }
+
+    // HUMAN CHARACTER GENERATOR
+    function createDetailedHumanoid(options = {}) {
+      const {
+        skinColor = 0xf59e0b,
+        shirtColor = 0xf8fafc,
+        pantsColor = 0x1e293b,
+        shoesColor = 0x0f172a,
+        scale = 1.0,
+        hasTie = false,
+        tieColor = 0x1e3a8a,
+        hasBackpack = false,
+        backpackColor = 0x0369a1,
+        hasCap = false,
+        capColor = 0x0f172a,
+        hasSash = false,
+        sashColor = 0xf97316,
+        hasVest = false,
+        vestColor = 0x84cc16,
+        hasMarketBag = false,
+        bagColor = 0xd97706,
+        hasPlacard = false
+      } = options;
+
+      const human = new THREE.Group();
+
+      const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.65 });
+      const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.5 });
+      const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.6 });
+      const shoesMat = new THREE.MeshStandardMaterial({ color: shoesColor, roughness: 0.3 });
+
+      const headGroup = new THREE.Group();
+      headGroup.position.y = 1.62 * scale;
+
+      const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18 * scale, 14, 14), skinMat);
+      headMesh.scale.set(0.9, 1.05, 0.95);
+      headGroup.add(headMesh);
+
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.19 * scale, 12, 12), new THREE.MeshStandardMaterial({ color: 0x171717, roughness: 0.9 }));
+      hair.position.set(0, 0.05 * scale, -0.02 * scale);
+      headGroup.add(hair);
+
+      if (hasCap) {
+        const capCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * scale, 0.22 * scale, 0.1 * scale, 14), new THREE.MeshStandardMaterial({ color: capColor }));
+        capCrown.position.y = 0.14 * scale;
+        headGroup.add(capCrown);
+      }
+      human.add(headGroup);
+
+      const torsoGroup = new THREE.Group();
+      torsoGroup.position.y = 1.12 * scale;
+
+      const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.48 * scale, 0.65 * scale, 0.28 * scale), shirtMat);
+      torsoMesh.castShadow = true;
+      torsoGroup.add(torsoMesh);
+
+      if (hasTie) {
+        const tie = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.38 * scale, 0.03 * scale), new THREE.MeshStandardMaterial({ color: tieColor }));
+        tie.position.set(0, 0.12 * scale, 0.15 * scale);
+        torsoGroup.add(tie);
+      }
+
+      if (hasSash) {
+        const sash = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 0.72 * scale, 0.31 * scale), new THREE.MeshStandardMaterial({ color: sashColor }));
+        sash.rotation.z = -0.32;
+        torsoGroup.add(sash);
+      }
+
+      if (hasVest) {
+        const vest = new THREE.Mesh(new THREE.BoxGeometry(0.52 * scale, 0.58 * scale, 0.32 * scale), new THREE.MeshStandardMaterial({ color: vestColor }));
+        torsoGroup.add(vest);
+      }
+
+      if (hasBackpack) {
+        const bp = new THREE.Mesh(new THREE.BoxGeometry(0.38 * scale, 0.46 * scale, 0.22 * scale), new THREE.MeshStandardMaterial({ color: backpackColor }));
+        bp.position.set(0, 0.05 * scale, -0.22 * scale);
+        torsoGroup.add(bp);
+      }
+
+      human.add(torsoGroup);
+
+      const leftArmGroup = new THREE.Group();
+      leftArmGroup.position.set(-0.3 * scale, 1.38 * scale, 0);
+      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 0.58 * scale, 0.14 * scale), shirtMat);
+      leftArm.position.y = -0.26 * scale;
+      leftArmGroup.add(leftArm);
+      human.add(leftArmGroup);
+
+      const rightArmGroup = new THREE.Group();
+      rightArmGroup.position.set(0.3 * scale, 1.38 * scale, 0);
+      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 0.58 * scale, 0.14 * scale), shirtMat);
+      rightArm.position.y = -0.26 * scale;
+      rightArmGroup.add(rightArm);
+      human.add(rightArmGroup);
+
+      if (hasMarketBag) {
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(0.24 * scale, 0.32 * scale, 0.18 * scale), new THREE.MeshStandardMaterial({ color: bagColor }));
+        bag.position.set(0, -0.42 * scale, 0.05 * scale);
+        rightArmGroup.add(bag);
+      }
+
+      if (hasPlacard) {
+        const placardStaff = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * scale, 0.02 * scale, 1.4 * scale, 8), new THREE.MeshStandardMaterial({ color: 0x78350f }));
+        placardStaff.position.set(0, 0.45 * scale, 0.18 * scale);
+        rightArmGroup.add(placardStaff);
+
+        const placardBoard = new THREE.Mesh(new THREE.BoxGeometry(0.72 * scale, 0.52 * scale, 0.04 * scale), new THREE.MeshStandardMaterial({ color: 0xfef08a }));
+        placardBoard.position.set(0, 1.15 * scale, 0.18 * scale);
+        rightArmGroup.add(placardBoard);
+      }
+
+      const leftLegGroup = new THREE.Group();
+      leftLegGroup.position.set(-0.13 * scale, 0.8 * scale, 0);
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.76 * scale, 0.2 * scale), pantsMat);
+      leftLeg.position.y = -0.38 * scale;
+      leftLegGroup.add(leftLeg);
+      human.add(leftLegGroup);
+
+      const rightLegGroup = new THREE.Group();
+      rightLegGroup.position.set(0.13 * scale, 0.8 * scale, 0);
+      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18 * scale, 0.76 * scale, 0.2 * scale), pantsMat);
+      rightLeg.position.y = -0.38 * scale;
+      rightLegGroup.add(rightLeg);
+      human.add(rightLegGroup);
+
+      human.userData = {
+        leftArmGroup,
+        rightArmGroup,
+        leftLegGroup,
+        rightLegGroup,
+        headGroup,
+        animOffset: Math.random() * Math.PI * 2,
+        walkSpeed: 4.8 + Math.random() * 2.2,
+        origX: 0,
+        walkRange: 4.8 + Math.random() * 2.4,
+        currentPatrolT: Math.random() * 10
+      };
+
+      return human;
+    }
+
+    // 1. CRASH SITE & RESCUE SCENE (Z = 950m)
+    function buildCrashSite3D() {
+      crashCivilianCar = createRealisticCivilianCar(0xd97706);
+      crashCivilianCar.position.set(2.2, 0, CRASH_Z + 38);
+      scene.add(crashCivilianCar);
+
+      pedestrianVictim = createDetailedHumanoid({
+        skinColor: 0xf59e0b,
+        shirtColor: 0x2563eb,
+        pantsColor: 0x1e293b,
+        shoesColor: 0x0f172a,
+        scale: 1.0
+      });
+      pedestrianVictim.position.set(-1.5, 0, CRASH_Z + 10);
+      pedestrianVictim.rotation.y = Math.PI / 2;
+      scene.add(pedestrianVictim);
+
+      paramedicGurneyMesh = new THREE.Group();
+
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.95, roughness: 0.2 });
+      const gurneyChassis = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.22, 2.25), frameMat);
+      gurneyChassis.position.y = 0.42;
+      paramedicGurneyMesh.add(gurneyChassis);
+
+      const mattress = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.16, 2.15), new THREE.MeshStandardMaterial({ color: 0x0891b2 }));
+      mattress.position.y = 0.58;
+      paramedicGurneyMesh.add(mattress);
+
+      donorOrganBoxMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.38, 0.32, 0.36),
+        new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.8, roughness: 0.25 })
+      );
+      donorOrganBoxMesh.position.set(0, 0.78, 0.85);
+      paramedicGurneyMesh.add(donorOrganBoxMesh);
+
+      // Supine Sleeping Patient Format
+      supinePatientMesh = new THREE.Group();
+
+      const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 14), new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.65 }));
+      pHead.position.set(0, 0.76, -0.8);
+      supinePatientMesh.add(pHead);
+
+      const bandage = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 14), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 }));
+      bandage.position.set(0, 0.78, -0.8);
+      supinePatientMesh.add(bandage);
+
+      const supineBody = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.22, 1.35), new THREE.MeshStandardMaterial({ color: 0xe0f2fe, roughness: 0.6 }));
+      supineBody.position.set(0, 0.72, 0.05);
+      supinePatientMesh.add(supineBody);
+
+      supinePatientMesh.visible = false;
+      paramedicGurneyMesh.add(supinePatientMesh);
+
+      paramedicGurneyMesh.position.set(4.2, 0, CRASH_Z + 7);
+      scene.add(paramedicGurneyMesh);
+
+      function createParamedic(xPos, zPos) {
+        const p = createDetailedHumanoid({
+          skinColor: 0xf59e0b,
+          shirtColor: 0x0284c7,
+          pantsColor: 0x0f172a,
+          shoesColor: 0x000000,
+          scale: 0.98,
+          hasVest: true,
+          vestColor: 0x0284c7
+        });
+        p.position.set(xPos, 0, zPos);
+        scene.add(p);
+        return p;
+      }
+      paramedic1Mesh = createParamedic(3.4, CRASH_Z + 8.5);
+      paramedic2Mesh = createParamedic(4.9, CRASH_Z + 8.5);
+    }
+
+    // 2. CIVILIAN ARTERIAL VEHICLES
+    function buildCivilianCars3D() {
+      civilianCars = [];
+      const colors = [0x2563eb, 0xdc2626, 0x16a34a, 0x64748b, 0xd97706, 0x7c3aed, 0x0284c7];
+      const zLocations = [900, 840, 780, 660, 600, 540, 420, 360, 300, 240, 180, 120, 60];
+
+      zLocations.forEach((z, idx) => {
+        const isLeftLane = idx % 2 === 0;
+        const car = createRealisticCivilianCar(colors[idx % colors.length]);
+        const xPos = isLeftLane ? -3.8 : 3.8;
+        car.position.set(xPos, 0, z);
+        car.userData = {
+          lane: isLeftLane ? 'LEFT' : 'RIGHT',
+          origX: xPos,
+          pulledOver: false
+        };
+        scene.add(car);
+        civilianCars.push(car);
+      });
+    }
+
+    // 3. POLITICAL PROTEST RALLY (Z = 720m) WITH COB MARSHALS
+    function buildPoliticianProtest3D() {
+      protestCrowdGroup = [];
+      const protestZone = new THREE.Group();
+
+      const stage = new THREE.Mesh(
+        new THREE.BoxGeometry(7, 0.35, 3.8),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.85 })
+      );
+      stage.position.set(0, 0.18, PROTEST_Z);
+      protestZone.add(stage);
+
+      const podium = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 1.1, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.7 })
+      );
+      podium.position.set(0, 0.75, PROTEST_Z - 0.8);
+      protestZone.add(podium);
+
+      const banner = new THREE.Mesh(
+        new THREE.BoxGeometry(11, 1.4, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 })
+      );
+      banner.position.set(0, 3.4, PROTEST_Z);
+      protestZone.add(banner);
+
+      const sashColors = [0xf97316, 0x16a34a, 0x2563eb, 0xdc2626, 0x9333ea];
+
+      for (let i = -6; i <= 6; i += 1.35) {
+        const isSpeaker = Math.abs(i) < 0.8;
+        const colorIndex = Math.floor(Math.random() * sashColors.length);
+
+        const politician = createDetailedHumanoid({
+          skinColor: 0xf59e0b,
+          shirtColor: 0xf8fafc,
+          pantsColor: 0xf1f5f9,
+          shoesColor: 0x451a03,
+          scale: 1.0,
+          hasSash: true,
+          sashColor: sashColors[colorIndex],
+          hasPlacard: !isSpeaker && Math.random() > 0.35
+        });
+
+        politician.position.set(i + (Math.random() - 0.5) * 0.4, isSpeaker ? 0.35 : 0, PROTEST_Z + (Math.random() - 0.5) * 2.8);
+        politician.userData.origX = politician.position.x;
+        protestZone.add(politician);
+        protestCrowdGroup.push(politician);
+      }
+
+      // Stationed Tactical COB Marshals Directly Beside Politicians
+      function createProtestMarshal(xPos) {
+        const m = createDetailedHumanoid({
+          skinColor: 0xf59e0b,
+          shirtColor: 0x0f172a,
+          pantsColor: 0x0f172a,
+          shoesColor: 0x000000,
+          scale: 1.02,
+          hasCap: true,
+          capColor: 0x0f172a,
+          hasVest: true,
+          vestColor: 0x84cc16
+        });
+        const wandMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+        const wandTube = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.75, 12), wandMat);
+        wandTube.position.set(0, -0.28, 0.22);
+        wandTube.rotation.x = Math.PI / 4;
+        m.userData.rightArmGroup.add(wandTube);
+
+        const wLight = new THREE.PointLight(0x22d3ee, 2.5, 14);
+        wLight.position.set(0, -0.25, 0.4);
+        m.userData.rightArmGroup.add(wLight);
+
+        m.position.set(xPos, 0, PROTEST_Z - 0.5);
+        m.userData.origX = xPos;
+        protestZone.add(m);
+        return m;
+      }
+
+      createProtestMarshal(-4.5);
+      createProtestMarshal(4.5);
+
+      scene.add(protestZone);
+    }
+
+    // Dynamic High-Resolution Procedural Canvas Text Texture Generator
+    function createBuildingSignTexture(title, subtitle, bgColorHex, textColorHex, accentColorHex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = bgColorHex;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = accentColorHex;
+      ctx.lineWidth = 14;
+      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+      ctx.fillStyle = textColorHex;
+      ctx.font = 'bold 60px "Plus Jakarta Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 24);
+
+      ctx.fillStyle = accentColorHex;
+      ctx.font = 'bold 30px "JetBrains Mono", monospace';
+      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 48);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    // 4. SCHOOL & SUPERMARKET URBAN HUB WITH JUICE & SNACK CORNERS (Z = 480m)
+    function buildSchoolAndSupermarket3D() {
+      schoolCrowdGroup = [];
+      const hubZone = new THREE.Group();
+
+      // St. Jude School Building
+      const school = new THREE.Mesh(
+        new THREE.BoxGeometry(24, 15, 26),
+        new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.65 })
+      );
+      school.position.set(-24, 7.5, CROWD_Z);
+      hubZone.add(school);
+
+      const schoolSignTexture = createBuildingSignTexture(
+        "ST. JUDE HIGHER SECONDARY SCHOOL",
+        "★ GOVT. ACCREDITED • SPEED ZONE 20 KM/H ★",
+        "#1e1b4b",
+        "#f8fafc",
+        "#facc15"
+      );
+      const schoolSignBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(20, 3.6, 0.4),
+        [
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ map: schoolSignTexture, roughness: 0.3 })
+        ]
+      );
+      schoolSignBoard.position.set(-24, 12.2, CROWD_Z + 13.25);
+      hubZone.add(schoolSignBoard);
+
+      // 1. TROPICAL SQUEEZE JUICE CORNER (Z = CROWD_Z + 20)
+      const juiceShop = new THREE.Group();
+      const juiceKiosk = new THREE.Mesh(
+        new THREE.BoxGeometry(9.5, 5.8, 7.2),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4 })
+      );
+      juiceKiosk.position.set(-18, 2.9, CROWD_Z + 20);
+      juiceShop.add(juiceKiosk);
+
+      const juiceSignTexture = createBuildingSignTexture(
+        "TROPICAL SQUEEZE JUICE BAR",
+        "🧃 FRESH FRUIT JUICES • MILKSHAKES • COCONUT WATER 🥥",
+        "#7c2d12",
+        "#fffbeb",
+        "#f97316"
+      );
+      const juiceSign = new THREE.Mesh(
+        new THREE.BoxGeometry(8.6, 1.8, 0.25),
+        [
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ map: juiceSignTexture, roughness: 0.3 })
+        ]
+      );
+      juiceSign.position.set(-14.4, 5.2, CROWD_Z + 20);
+      juiceShop.add(juiceSign);
+
+      const juiceSpot = new THREE.PointLight(0xf97316, 2.0, 16);
+      juiceSpot.position.set(-13.6, 3.8, CROWD_Z + 20);
+      juiceShop.add(juiceSpot);
+      hubZone.add(juiceShop);
+
+      // 2. CAMPUS BITES & CHAI CORNER (Z = CROWD_Z - 20)
+      const snackShop = new THREE.Group();
+      const snackKiosk = new THREE.Mesh(
+        new THREE.BoxGeometry(9.5, 5.8, 7.2),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6 })
+      );
+      snackKiosk.position.set(-18, 2.9, CROWD_Z - 20);
+      snackShop.add(snackKiosk);
+
+      const snackSignTexture = createBuildingSignTexture(
+        "CAMPUS BITES & CHAI CORNER",
+        "🍔 HOT SAMOSAS • BURGERS • MASALA CHAI ☕",
+        "#450a0a",
+        "#fef2f2",
+        "#fbbf24"
+      );
+      const snackSign = new THREE.Mesh(
+        new THREE.BoxGeometry(8.6, 1.8, 0.25),
+        [
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ color: 0x0f172a }),
+          new THREE.MeshStandardMaterial({ map: snackSignTexture, roughness: 0.3 })
+        ]
+      );
+      snackSign.position.set(-14.4, 5.2, CROWD_Z - 20);
+      snackShop.add(snackSign);
+
+      const snackSpot = new THREE.PointLight(0xfbbf24, 2.2, 16);
+      snackSpot.position.set(-13.6, 3.8, CROWD_Z - 20);
+      snackShop.add(snackSpot);
+      hubZone.add(snackShop);
+
+      // Metro Fresh Supermarket
+      const market = new THREE.Mesh(
+        new THREE.BoxGeometry(24, 13, 26),
+        new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.5 })
+      );
+      market.position.set(24, 6.5, CROWD_Z);
+      hubZone.add(market);
+
+      const marketSignTexture = createBuildingSignTexture(
+        "METRO FRESH SUPERMARKET",
+        "🛒 24/7 ORGANIC GROCERIES & HYPERMART 🛒",
+        "#022c22",
+        "#ecfdf5",
+        "#34d399"
+      );
+      const marketSignBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(19, 3.4, 0.4),
+        [
+          new THREE.MeshStandardMaterial({ color: 0x022c22 }),
+          new THREE.MeshStandardMaterial({ color: 0x022c22 }),
+          new THREE.MeshStandardMaterial({ color: 0x022c22 }),
+          new THREE.MeshStandardMaterial({ color: 0x022c22 }),
+          new THREE.MeshStandardMaterial({ color: 0x022c22 }),
+          new THREE.MeshStandardMaterial({ map: marketSignTexture, roughness: 0.3 })
+        ]
+      );
+      marketSignBoard.position.set(24, 10.8, CROWD_Z + 13.25);
+      hubZone.add(marketSignBoard);
+
+      // Student and Market Citizens Walking Across Road
+      for (let i = -5.8; i <= 5.8; i += 1.25) {
+        const isStudent = i < 0;
+        let citizen;
+
+        if (isStudent) {
+          citizen = createDetailedHumanoid({
+            skinColor: 0xf59e0b,
+            shirtColor: 0xe0f2fe,
+            pantsColor: 0x1e3a8a,
+            shoesColor: 0x0f172a,
+            scale: 0.88,
+            hasTie: true,
+            tieColor: 0x172554,
+            hasBackpack: true,
+            backpackColor: Math.random() > 0.5 ? 0x0284c7 : 0xd97706
+          });
+        } else {
+          const kurtaColors = [0xd97706, 0x059669, 0xb91c1c, 0x7c3aed, 0x0284c7];
+          const kColor = kurtaColors[Math.floor(Math.random() * kurtaColors.length)];
+
+          citizen = createDetailedHumanoid({
+            skinColor: 0xf59e0b,
+            shirtColor: kColor,
+            pantsColor: 0xf8fafc,
+            shoesColor: 0x451a03,
+            scale: 0.98,
+            hasMarketBag: true,
+            bagColor: 0xf59e0b
+          });
+        }
+
+        citizen.position.set(i + (Math.random() - 0.5) * 0.4, 0, CROWD_Z + (Math.random() - 0.5) * 3.2);
+        citizen.userData.origX = citizen.position.x;
+        hubZone.add(citizen);
+        schoolCrowdGroup.push(citizen);
+      }
+
+      scene.add(hubZone);
+    }
+
+    // 5. TRAFFIC SIGNAL GANTRY (Z = 0m)
+    function buildTrafficSignalGantry3D() {
+      signalGantryGroup = new THREE.Group();
+
+      const mast = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.25, 8.5, 16),
+        new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 })
+      );
+      mast.position.set(7.5, 4.25, STOPLINE_Z);
+      signalGantryGroup.add(mast);
+
+      const cantilever = new THREE.Mesh(
+        new THREE.BoxGeometry(15, 0.35, 0.35),
+        new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 })
+      );
+      cantilever.position.set(0, 7.8, STOPLINE_Z);
+      signalGantryGroup.add(cantilever);
+
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 2.4, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 })
+      );
+      box.position.set(0, 7.4, STOPLINE_Z);
+      signalGantryGroup.add(box);
+
+      lightRedMesh = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+      lightRedMesh.position.set(0, 8.1, STOPLINE_Z + 0.21);
+      signalGantryGroup.add(lightRedMesh);
+
+      lightAmberMesh = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), new THREE.MeshBasicMaterial({ color: 0x332200 }));
+      lightAmberMesh.position.set(0, 7.4, STOPLINE_Z + 0.21);
+      signalGantryGroup.add(lightAmberMesh);
+
+      lightGreenMesh = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), new THREE.MeshBasicMaterial({ color: 0x003311 }));
+      lightGreenMesh.position.set(0, 6.7, STOPLINE_Z + 0.21);
+      signalGantryGroup.add(lightGreenMesh);
+
+      signalLightGlow = new THREE.PointLight(0xff0000, 2.5, 25);
+      signalLightGlow.position.set(0, 6.5, STOPLINE_Z + 3);
+      signalGantryGroup.add(signalLightGlow);
+
+      scene.add(signalGantryGroup);
+    }
+
+    // 6. SIGNAL POLICE CHECKPOINT (Z = 0m) WITH MULTI-COLOR NIGHT WAND
+    function buildSignalPoliceCheckpoint3D() {
+      signalPoliceCarMesh = new THREE.Group();
+      const pBody = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 1.25, 4.5),
+        new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.2, metalness: 0.8 })
+      );
+      pBody.position.y = 0.85;
+      signalPoliceCarMesh.add(pBody);
+
+      const pDoors = new THREE.Mesh(
+        new THREE.BoxGeometry(2.12, 1.15, 2.0),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
+      );
+      pDoors.position.y = 0.85;
+      signalPoliceCarMesh.add(pDoors);
+
+      signalPoliceBeaconL = new THREE.PointLight(0xff0000, 0, 15);
+      signalPoliceBeaconL.position.set(-0.6, 2.2, 0);
+      signalPoliceCarMesh.add(signalPoliceBeaconL);
+
+      signalPoliceBeaconR = new THREE.PointLight(0x0066ff, 0, 15);
+      signalPoliceBeaconR.position.set(0.6, 2.2, 0);
+      signalPoliceCarMesh.add(signalPoliceBeaconR);
+
+      signalPoliceCarMesh.position.set(6.2, 0, STOPLINE_Z + 6);
+      signalPoliceCarMesh.rotation.y = -Math.PI / 4;
+      scene.add(signalPoliceCarMesh);
+
+      signalPoliceOfficerMesh = new THREE.Group();
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshStandardMaterial({ color: 0xfbbf24 }));
+      head.position.y = 1.65;
+      signalPoliceOfficerMesh.add(head);
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.72, 0.3), new THREE.MeshStandardMaterial({ color: 0x1e3a8a }));
+      body.position.y = 1.15;
+      signalPoliceOfficerMesh.add(body);
+
+      const vest = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.65, 0.32), new THREE.MeshStandardMaterial({ color: 0x84cc16 }));
+      vest.position.y = 1.15;
+      signalPoliceOfficerMesh.add(vest);
+
+      // Handheld CAD Scanner Tablet on Officer Left Hand
+      const tablet = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.38, 0.04), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+      tablet.position.set(-0.35, 1.25, 0.2);
+      const tabletScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.32), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+      tabletScreen.position.set(-0.35, 1.25, 0.23);
+      signalPoliceOfficerMesh.add(tablet);
+      signalPoliceOfficerMesh.add(tabletScreen);
+
+      // MULTI-COLOR NIGHT-VISION ILLUMINATED GUIDANCE WAND
+      const policeWandGroup = new THREE.Group();
+      policeWandGroup.position.set(0.38, 1.35, 0.2);
+
+      const wandHandle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 0.25, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 })
+      );
+      wandHandle.position.y = -0.15;
+      policeWandGroup.add(wandHandle);
+
+      const wandTubeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+      const wandTube = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 0.75, 16),
+        wandTubeMat
+      );
+      wandTube.position.y = 0.3;
+      policeWandGroup.add(wandTube);
+
+      const wandGlowLight = new THREE.PointLight(0x00ffff, 3.2, 18);
+      wandGlowLight.position.set(0, 0.45, 0);
+      policeWandGroup.add(wandGlowLight);
+
+      signalPoliceOfficerMesh.add(policeWandGroup);
+      signalPoliceOfficerMesh.userData = {
+        wandTubeMat,
+        wandGlowLight,
+        wandGroup: policeWandGroup,
+        tabletScreen
+      };
+
+      signalPoliceOfficerMesh.position.set(4.2, 0, STOPLINE_Z + 3);
+      scene.add(signalPoliceOfficerMesh);
+    }
+
+    // 7. COB ROAD MARSHALS SQUAD (Deployable along jammed road)
+    function buildCobMarshalsSquad3D() {
+      cobMarshalsSquad = [];
+      const zLocations = [620, 490, 370, 260, 140];
+      const wandColors = [0x22d3ee, 0x10b981, 0xf59e0b, 0xec4899, 0x3b82f6];
+
+      zLocations.forEach((z, idx) => {
+        const marshal = createDetailedHumanoid({
+          skinColor: 0xf59e0b,
+          shirtColor: 0x0f172a,
+          pantsColor: 0x0f172a,
+          shoesColor: 0x000000,
+          scale: 1.02,
+          hasCap: true,
+          capColor: 0x0f172a,
+          hasVest: true,
+          vestColor: 0x84cc16
+        });
+
+        const mColor = wandColors[idx % wandColors.length];
+        const wandMat = new THREE.MeshBasicMaterial({ color: mColor });
+        const wandTube = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.78, 12), wandMat);
+        wandTube.position.set(0, -0.28, 0.22);
+        wandTube.rotation.x = Math.PI / 4;
+        marshal.userData.rightArmGroup.add(wandTube);
+
+        const mLight = new THREE.PointLight(mColor, 2.5, 12);
+        mLight.position.set(0, -0.25, 0.45);
+        marshal.userData.rightArmGroup.add(mLight);
+
+        marshal.userData.wandMat = wandMat;
+        marshal.userData.mLight = mLight;
+
+        const xPos = idx % 2 === 0 ? -1.8 : 1.8;
+        marshal.position.set(xPos, 0, z);
+        marshal.visible = false;
+        scene.add(marshal);
+        cobMarshalsSquad.push(marshal);
+      });
+    }
+
+    // 8. HOSPITAL ER TRAUMA BAY & CHIEF SURGEON (Z = -220m)
+    function buildHospital3D() {
+      const hospGroup = new THREE.Group();
+
+      hospitalBuildingMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(32, 22, 28),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.5 })
+      );
+      hospitalBuildingMesh.position.set(0, 11, HOSPITAL_Z - 18);
+      hospGroup.add(hospitalBuildingMesh);
+
+      const canopy = new THREE.Mesh(
+        new THREE.BoxGeometry(16, 0.6, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8 })
+      );
+      canopy.position.set(0, 5.2, HOSPITAL_Z - 4);
+      hospGroup.add(canopy);
+
+      const crossMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const c1 = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.4, 0.2), crossMat);
+      c1.position.set(0, 16.5, HOSPITAL_Z - 3.8);
+      hospGroup.add(c1);
+
+      const c2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 5.2, 0.2), crossMat);
+      c2.position.set(0, 16.5, HOSPITAL_Z - 3.8);
+      hospGroup.add(c2);
+
+      // Chief Surgeon: Dr. Arvind
+      hospitalChiefDoctorMesh = new THREE.Group();
+      const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 14), new THREE.MeshStandardMaterial({ color: 0xfbbf24 }));
+      dHead.position.y = 1.65;
+      hospitalChiefDoctorMesh.add(dHead);
+
+      const dCoat = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.85, 0.32), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 }));
+      dCoat.position.y = 1.15;
+      hospitalChiefDoctorMesh.add(dCoat);
+
+      const steth = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.03, 8, 16), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+      steth.position.set(0, 1.45, 0.16);
+      steth.rotation.x = Math.PI / 4;
+      hospitalChiefDoctorMesh.add(steth);
+
+      doctorRightArm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.14), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
+      doctorRightArm.position.set(0.38, 1.35, 0);
+      hospitalChiefDoctorMesh.add(doctorRightArm);
+
+      hospitalChiefDoctorMesh.position.set(2.8, 0, HOSPITAL_Z - 1.5);
+      hospGroup.add(hospitalChiefDoctorMesh);
+
+      scene.add(hospGroup);
+    }
+
+    // =========================================================================
+    // STEP-BY-STEP USER WORKFLOW LOGIC
+    // =========================================================================
+
+    // STEP 1: PLAY CRASH AND RESCUE SEQUENCE
+    function playCrashAndLoadSequence() {
+      STATE.crashSequence.active = true;
+      STATE.crashSequence.stage = 'CAR_SPEEDING';
+      STATE.crashSequence.timer = 0;
+
+      initAudio();
+
+      if (crashCivilianCar) {
+        crashCivilianCar.position.set(2.2, 0, CRASH_Z + 38);
+        crashCivilianCar.rotation.set(0, 0, 0);
+      }
+      if (pedestrianVictim) {
+        pedestrianVictim.position.set(-1.5, 0, CRASH_Z + 10);
+        pedestrianVictim.rotation.set(0, Math.PI / 2, 0);
+        pedestrianVictim.visible = true;
+      }
+      if (supinePatientMesh) supinePatientMesh.visible = false;
+      if (paramedicGurneyMesh) {
+        paramedicGurneyMesh.position.set(4.2, 0, CRASH_Z + 7);
+        paramedicGurneyMesh.visible = true;
+      }
+      if (donorOrganBoxMesh) donorOrganBoxMesh.visible = true;
+
+      const btnText = document.getElementById('loadPatientBtnText');
+      if (btnText) btnText.innerText = "💥 VEHICLE SPEEDING TOWARD PEDESTRIAN...";
+
+      const banner = document.getElementById('crashIncidentBanner');
+      if (banner) banner.classList.remove('hidden');
+
+      setCameraMode('CRASH_SCENE');
+      playTireScreechSound();
+      logPoliceAudit('🚨 DISPATCH ALERT: High-speed reckless sedan heading toward crosswalk at KM 0.95!');
+    }
+
+    function updateCrashAndRescueKinematics(delta) {
+      if (!STATE.crashSequence.active) return;
+      STATE.crashSequence.timer += delta;
+      const t = STATE.crashSequence.timer;
+
+      if (STATE.crashSequence.stage === 'CAR_SPEEDING') {
+        if (pedestrianVictim) {
+          pedestrianVictim.position.x += delta * 1.8;
+          pedestrianVictim.position.y = Math.abs(Math.sin(t * 8)) * 0.12;
+        }
+        if (crashCivilianCar) {
+          crashCivilianCar.position.z -= delta * 24;
+        }
+        if (crashCivilianCar && crashCivilianCar.position.z <= CRASH_Z + 11.5) {
+          STATE.crashSequence.stage = 'IMPACT';
+          playCrashImpactSound();
+        }
+      } else if (STATE.crashSequence.stage === 'IMPACT') {
+        if (crashCivilianCar) {
+          crashCivilianCar.position.x += delta * 1.2;
+          crashCivilianCar.rotation.y = 0.52;
+          crashCivilianCar.rotation.z = -0.06;
+        }
+        if (pedestrianVictim) {
+          pedestrianVictim.position.x = 2.8;
+          pedestrianVictim.position.y = 0.22;
+          pedestrianVictim.position.z = CRASH_Z + 6.2;
+          pedestrianVictim.rotation.x = Math.PI / 2;
+          pedestrianVictim.rotation.z = 0.65;
+        }
+        if (t >= 1.6) {
+          STATE.crashSequence.stage = 'AMBULANCE_ARRIVE';
+          logPoliceAudit('🚑 AMBULANCE 108 ARRIVES: Paramedics deploying gurney to stabilize victim & cryogenic donor organ.');
+        }
+      } else if (STATE.crashSequence.stage === 'AMBULANCE_ARRIVE') {
+        if (paramedic1Mesh && paramedic2Mesh) {
+          paramedic1Mesh.position.x += (2.2 - paramedic1Mesh.position.x) * 0.12;
+          paramedic2Mesh.position.x += (3.4 - paramedic2Mesh.position.x) * 0.12;
+        }
+        if (paramedicGurneyMesh) {
+          paramedicGurneyMesh.position.x += (2.6 - paramedicGurneyMesh.position.x) * 0.1;
+          paramedicGurneyMesh.position.z += (CRASH_Z + 6.2 - paramedicGurneyMesh.position.z) * 0.1;
+        }
+        if (t >= 3.2) {
+          STATE.crashSequence.stage = 'PARAMEDIC_EXTRACT';
+          if (pedestrianVictim) pedestrianVictim.visible = false;
+          if (supinePatientMesh) supinePatientMesh.visible = true;
+        }
+      } else if (STATE.crashSequence.stage === 'PARAMEDIC_EXTRACT') {
+        if (paramedicGurneyMesh) {
+          paramedicGurneyMesh.position.x += (0 - paramedicGurneyMesh.position.x) * 0.08;
+          paramedicGurneyMesh.position.z += (CRASH_Z + 3.2 - paramedicGurneyMesh.position.z) * 0.08;
+        }
+        if (t >= 5.0) {
+          if (paramedicGurneyMesh) {
+            paramedicGurneyMesh.position.z += (CRASH_Z + 1.0 - paramedicGurneyMesh.position.z) * 0.15;
+          }
+        }
+        if (t >= 6.4) {
+          STATE.crashSequence.stage = 'LOADED';
+          STATE.crashSequence.active = false;
+          completePatientLoading();
+        }
+      }
+    }
+
+    function completePatientLoading() {
+      STATE.ambulance.patientLoaded = true;
+      STATE.ambulance.organLoaded = true;
+      if (pedestrianVictim) pedestrianVictim.visible = false;
+      if (supinePatientMesh) supinePatientMesh.visible = false;
+      if (paramedicGurneyMesh) paramedicGurneyMesh.visible = false;
+
+      const crashBadge = document.getElementById('crashStatusBadge');
+      if (crashBadge) {
+        crashBadge.innerText = "PATIENT SECURED";
+        crashBadge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold";
+      }
+      const btnText = document.getElementById('loadPatientBtnText');
+      if (btnText) btnText.innerText = "✓ PATIENT & ORGAN ONBOARD";
+      const vitals = document.getElementById('hudVitals');
+      if (vitals) {
+        vitals.innerText = "STABILIZED IN AMBULANCE CABIN";
+        vitals.className = "font-bold text-emerald-400";
+      }
+
+      const btnCob = document.getElementById('btnSendCobLink');
+      if (btnCob) {
+        btnCob.disabled = false;
+        btnCob.className = "w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs font-mono transition shadow-lg shadow-cyan-600/25 flex items-center justify-center gap-2 cursor-pointer";
+      }
+      const linkBadge = document.getElementById('linkBadge');
+      if (linkBadge) {
+        linkBadge.innerText = "READY TO SEND";
+        linkBadge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold";
+      }
+
+      playNotificationChirp(700);
+      logPoliceAudit('✓ STRETCHER SECURED INSIDE AMBULANCE. Step 2 unlocked: Share link with COB.');
+    }
+
+    // STEP 2: COB ACCESS LINK TRANSMISSION & APPROVAL
+    function sendAccessLinkToCob() {
+      STATE.cob.linkSent = true;
+      const modal = document.getElementById('cobMobileModal');
+      if (modal) modal.classList.remove('hidden');
+
+      const hudCob = document.getElementById('hudCobStatus');
+      if (hudCob) {
+        hudCob.innerText = "AWAITING COB APPROVAL";
+        hudCob.className = "font-bold text-amber-400";
+      }
+      const linkBadge = document.getElementById('linkBadge');
+      if (linkBadge) {
+        linkBadge.innerText = "LINK SENT";
+        linkBadge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold";
+      }
+
+      playNotificationChirp(880);
+      logPoliceAudit('📲 ACCESS LINK TRANSMITTED to COB Duty Officer (+91 98450 11099). Awaiting approval.');
+    }
+
+    function approveCobLinkAction() {
+      STATE.cob.linkApproved = true;
+      STATE.cob.marshalsActive = true;
+
+      cobMarshalsSquad.forEach(m => m.visible = true);
+
+      civilianCars.forEach(car => {
+        car.userData.pulledOver = true;
+      });
+
+      const modal = document.getElementById('cobMobileModal');
+      if (modal) modal.classList.add('hidden');
+
+      const hudCob = document.getElementById('hudCobStatus');
+      if (hudCob) {
+        hudCob.innerText = "COB APPROVED (CAD#8921)";
+        hudCob.className = "font-bold text-emerald-400";
+      }
+      const linkBadge = document.getElementById('linkBadge');
+      if (linkBadge) {
+        linkBadge.innerText = "APPROVED";
+        linkBadge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold";
+      }
+
+      const btnDrive = document.getElementById('btnDriveToggle');
+      if (btnDrive) {
+        btnDrive.disabled = false;
+        btnDrive.className = "py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs font-mono transition shadow-lg shadow-amber-600/20 flex items-center justify-center gap-1.5 cursor-pointer";
+      }
+      const btnStep = document.getElementById('btnStepDrive');
+      if (btnStep) {
+        btnStep.disabled = false;
+        btnStep.className = "py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs font-mono transition border border-cyan-500/30 flex items-center justify-center gap-1.5 cursor-pointer";
+      }
+
+      STATE.ambulance.sirenActive = true;
+      startSirenSound();
+
+      playNotificationChirp(1040);
+      logPoliceAudit('✓ COB OFFICER APPROVED CORRIDOR! 5 Road Marshals deployed. Civilian vehicles yielding.');
+
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const paMsg = new SpeechSynthesisUtterance("Attention all vehicles! This is City Operations Bureau command: Critical emergency for organ donation to achieve the hospital on time! Leave the way and move immediately!");
+          paMsg.rate = 1.05;
+          window.speechSynthesis.speak(paMsg);
+        } catch (e) {}
+      }
+    }
+
+    function rejectCobLinkAction() {
+      const modal = document.getElementById('cobMobileModal');
+      if (modal) modal.classList.add('hidden');
+      STATE.cob.linkSent = false;
+      const hudCob = document.getElementById('hudCobStatus');
+      if (hudCob) {
+        hudCob.innerText = "REJECTED BY COB";
+        hudCob.className = "font-bold text-rose-500";
+      }
+      logPoliceAudit('✕ COB Officer flagged link. Preemption denied.');
+    }
+
+    // STEP 3: MANUAL USER-CONTROLLED TRANSIT & GATES
+    function toggleManualDriving() {
+      USER_GATE.isManualDriving = !USER_GATE.isManualDriving;
+      const label = document.getElementById('driveBtnLabel');
+      const badge = document.getElementById('driveStateBadge');
+      if (USER_GATE.isManualDriving) {
+        if (label) label.innerText = "HALT / BRAKE";
+        if (badge) {
+          badge.innerText = "DRIVING";
+          badge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold";
+        }
+        setCameraMode('CHASE');
+      } else {
+        if (label) label.innerText = "RESUME DRIVE";
+        if (badge) {
+          badge.innerText = "HALTED";
+          badge.className = "text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold";
+        }
+      }
+    }
+
+    function stepForwardDistance(meters) {
+      STATE.ambulance.distanceMeters = Math.max(HOSPITAL_Z, STATE.ambulance.distanceMeters - meters);
+      const slider = document.getElementById('distanceSlider');
+      if (slider) slider.value = STATE.ambulance.distanceMeters;
+      updateTraversalUI(STATE.ambulance.distanceMeters);
+    }
+
+    function clearProtestGateAction() {
+      STATE.gates.protestCleared = true;
+      protestCrowdGroup.forEach((dem, idx) => {
+        const side = idx % 2 === 0 ? -1 : 1;
+        dem.position.x = side * (8.5 + Math.random() * 2);
+      });
+      const stat = document.getElementById('gateProtestStatus');
+      if (stat) {
+        stat.innerText = "✓ Dispersed to shoulders";
+        stat.className = "text-[11px] text-emerald-400 font-bold";
+      }
+      const btn = document.getElementById('btnGateProtest');
+      if (btn) {
+        btn.innerText = "Cleared";
+        btn.className = "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 font-mono text-xs cursor-default";
+      }
+      playNotificationChirp(750);
+      logPoliceAudit('📢 PROTEST DISPERSED: Politicians escorted to shoulders by COB marshals. Corridor at 720m clear.');
+    }
+
+    function clearCrowdGateAction() {
+      STATE.gates.crowdCleared = true;
+      schoolCrowdGroup.forEach((person, idx) => {
+        const side = idx % 2 === 0 ? -1 : 1;
+        person.position.x = side * (8.2 + Math.random() * 2.5);
+      });
+      const stat = document.getElementById('gateCrowdStatus');
+      if (stat) {
+        stat.innerText = "✓ Cleared to sidewalks";
+        stat.className = "text-[11px] text-emerald-400 font-bold";
+      }
+      const btn = document.getElementById('btnGateCrowd');
+      if (btn) {
+        btn.innerText = "Cleared";
+        btn.className = "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 font-mono text-xs cursor-default";
+      }
+      playNotificationChirp(750);
+      logPoliceAudit('📢 SCHOOL & MARKET CROWD CLEARED: Students & shoppers safe on sidewalk. Corridor at 480m clear.');
+    }
+
+    function openSignalPoliceModal() {
+      const modal = document.getElementById('policeTabletModal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function approveSignalPoliceLinkAction() {
+      const modal = document.getElementById('policeTabletModal');
+      if (modal) modal.classList.add('hidden');
+
+      STATE.gates.signalAuthorized = true;
+      STATE.signal.state = 'EMERGENCY_GREEN';
+      updateSignalDisplay();
+
+      if (signalPoliceOfficerMesh && signalPoliceOfficerMesh.userData.tabletScreen) {
+        signalPoliceOfficerMesh.userData.tabletScreen.material.color.setHex(0x10b981);
+      }
+
+      const hudPolice = document.getElementById('hudPoliceStatus');
+      if (hudPolice) {
+        hudPolice.innerText = "CAD VALIDATED ✓";
+        hudPolice.className = "font-extrabold text-emerald-400";
+      }
+
+      const banner = document.getElementById('signalPoliceBanner');
+      if (banner) banner.classList.remove('hidden');
+
+      const stat = document.getElementById('gateSignalStatus');
+      if (stat) {
+        stat.innerText = "✓ Validated & Latched Green";
+        stat.className = "text-[11px] text-emerald-400 font-mono font-bold";
+      }
+      const btn = document.getElementById('btnGateSignal');
+      if (btn) {
+        btn.innerText = "Authorized";
+        btn.className = "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 font-mono text-xs cursor-default";
+      }
+
+      playNotificationChirp(920);
+      logPoliceAudit('🚦 SUB-250ms PREEMPTION: Officer validated CAD hash. Gantry latched to EMERGENCY GREEN.');
+
+      if ('speechSynthesis' in window) {
+        try {
+          const pMsg = new SpeechSynthesisUtterance("Signal Police Checkpoint: CAD token verified for organ donation run. Preemption green confirmed!");
+          pMsg.rate = 1.05;
+          window.speechSynthesis.speak(pMsg);
+        } catch (e) {}
+      }
+    }
+
+    function updateSignalDisplay() {
+      if (!lightRedMesh || !lightGreenMesh) return;
+      if (STATE.signal.state === 'EMERGENCY_GREEN') {
+        lightRedMesh.material.color.setHex(0x330000);
+        lightAmberMesh.material.color.setHex(0x332200);
+        lightGreenMesh.material.color.setHex(0x00ff44);
+        if (signalLightGlow) signalLightGlow.color.setHex(0x00ff44);
+        const hudSig = document.getElementById('hudSignal');
+        if (hudSig) {
+          hudSig.innerText = "PREEMPTION GREEN";
+          hudSig.className = "font-bold text-emerald-400";
+        }
+      } else {
+        lightRedMesh.material.color.setHex(0xff0000);
+        lightAmberMesh.material.color.setHex(0x332200);
+        lightGreenMesh.material.color.setHex(0x003311);
+        if (signalLightGlow) signalLightGlow.color.setHex(0xff0000);
+        const hudSig = document.getElementById('hudSignal');
+        if (hudSig) {
+          hudSig.innerText = "MUNICIPAL RED";
+          hudSig.className = "font-bold text-red-500";
+        }
+      }
+    }
+
+    // =========================================================================
+    // MAIN ANIMATION LOOP & KINEMATICS
+    // =========================================================================
+    function animateLoop() {
+      requestAnimationFrame(animateLoop);
+      const delta = simulationClock.getDelta();
+      const elapsedTime = simulationClock.getElapsedTime();
+
+      // Multi-Color Dynamic Color Cycling for Police Inspection Wand
+      if (signalPoliceOfficerMesh && signalPoliceOfficerMesh.userData.wandTubeMat) {
+        const hue = (elapsedTime * 0.35) % 1.0;
+        const color = new THREE.Color().setHSL(hue, 1.0, 0.55);
+        signalPoliceOfficerMesh.userData.wandTubeMat.color.copy(color);
+        signalPoliceOfficerMesh.userData.wandGlowLight.color.copy(color);
+
+        if (signalPoliceOfficerMesh.userData.wandGroup) {
+          signalPoliceOfficerMesh.userData.wandGroup.rotation.x = Math.sin(elapsedTime * 5) * 0.35 + 0.3;
+          signalPoliceOfficerMesh.userData.wandGroup.rotation.z = Math.cos(elapsedTime * 4) * 0.25;
+        }
+      }
+
+      // Dynamic Shimmer on COB Road Marshals' illuminated wands
+      if (STATE.cob.marshalsActive) {
+        cobMarshalsSquad.forEach((marshal, idx) => {
+          if (marshal.userData.rightArmGroup) {
+            marshal.userData.rightArmGroup.rotation.x = Math.sin(elapsedTime * 6 + idx) * 0.45 - 0.5;
+            marshal.userData.rightArmGroup.rotation.z = Math.cos(elapsedTime * 5 + idx) * 0.25;
+          }
+          if (marshal.userData.mLight) {
+            marshal.userData.mLight.intensity = 2.2 + Math.sin(elapsedTime * 8 + idx) * 1.2;
+          }
+        });
+      }
+
+      // Smooth Natural Walking Motion for Students and Market Crowd
+      if (!STATE.gates.crowdCleared) {
+        schoolCrowdGroup.forEach((person) => {
+          const u = person.userData;
+          if (u.leftLegGroup && u.rightLegGroup) {
+            u.currentPatrolT += delta * (u.walkSpeed * 0.28);
+            const patrolSin = Math.sin(u.currentPatrolT + u.animOffset);
+            person.position.x = u.origX + patrolSin * u.walkRange;
+
+            const headingDeriv = Math.cos(u.currentPatrolT + u.animOffset);
+            person.rotation.y = headingDeriv >= 0 ? Math.PI / 2 : -Math.PI / 2;
+
+            const strideAngle = Math.sin(u.currentPatrolT * 3.6) * 0.72;
+            u.leftLegGroup.rotation.x = strideAngle;
+            u.rightLegGroup.rotation.x = -strideAngle;
+            u.leftArmGroup.rotation.x = -strideAngle * 0.85;
+            u.rightArmGroup.rotation.x = strideAngle * 0.85;
+          }
+        });
+      }
+
+      updateCrashAndRescueKinematics(delta);
+
+      // Traversal Driving Mechanics
+      if (USER_GATE.isManualDriving && STATE.ambulance.patientLoaded) {
+        let currentTargetSpeed = 68;
+
+        if (STATE.ambulance.distanceMeters <= PROTEST_Z + 18 && !STATE.gates.protestCleared) {
+          currentTargetSpeed = 0;
+          setCameraMode('PROTEST');
+        } else if (STATE.ambulance.distanceMeters <= CROWD_Z + 18 && !STATE.gates.crowdCleared) {
+          currentTargetSpeed = 0;
+          setCameraMode('SCHOOL');
+        } else if (STATE.ambulance.distanceMeters <= STOPLINE_Z + 18 && !STATE.gates.signalAuthorized) {
+          currentTargetSpeed = 0;
+          setCameraMode('SIGNAL');
+        }
+
+        if (STATE.ambulance.distanceMeters <= HOSPITAL_Z) {
+          STATE.ambulance.distanceMeters = HOSPITAL_Z;
+          currentTargetSpeed = 0;
+          USER_GATE.isManualDriving = false;
+          STATE.ambulance.sirenActive = false;
+          stopSirenSound();
+          const tBadge = document.getElementById('transitBadge');
+          if (tBadge) {
+            tBadge.innerText = "ARRIVED SAFELY";
+            tBadge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold font-mono";
+          }
+          const linkBanner = document.getElementById('hospitalLinkAlertBanner');
+          if (linkBanner) linkBanner.classList.remove('hidden');
+          playDoctorSuccessFanfare();
+          logPoliceAudit('🏥 DOCTOR APPRECIATION: Chief Surgeon Dr. Arvind confirms organ & patient delivered on time: "Thank you team for the great job!"');
+
+          if ('speechSynthesis' in window && !STATE.hospitalSequence.speechSpoken) {
+            try {
+              STATE.hospitalSequence.speechSpoken = true;
+              window.speechSynthesis.cancel();
+              const dMsg = new SpeechSynthesisUtterance("Thank you team for the great job! The patient and donor organ have arrived safely on time for immediate surgery!");
+              dMsg.rate = 1.05;
+              window.speechSynthesis.speak(dMsg);
+            } catch (e) {}
+          }
+
+          if (!STATE.hospitalSequence.modalTriggered) {
+            STATE.hospitalSequence.modalTriggered = true;
+            setTimeout(() => {
+              const modal = document.getElementById('conclusionModal');
+              if (modal) modal.classList.remove('hidden');
+            }, 3200);
+          }
+        }
+
+        const speedMps = (currentTargetSpeed * 1000) / 3600;
+        STATE.ambulance.distanceMeters -= speedMps * delta;
+
+        // Rotating Ambulance Alloy Wheels with Speed
+        ambulanceWheelMeshes.forEach(w => {
+          w.rotation.x += speedMps * delta * 2.2;
+        });
+
+        const slider = document.getElementById('distanceSlider');
+        if (slider) slider.value = STATE.ambulance.distanceMeters;
+        updateTraversalUI(STATE.ambulance.distanceMeters);
+      }
+
+      if (STATE.ambulance.sirenActive) {
+        const flash = Math.floor(simulationClock.getElapsedTime() * 8) % 2 === 0;
+        if (ambulanceBeaconL) ambulanceBeaconL.intensity = flash ? 3.5 : 0;
+        if (ambulanceBeaconR) ambulanceBeaconR.intensity = flash ? 0 : 3.5;
+        if (signalPoliceBeaconL) signalPoliceBeaconL.intensity = flash ? 2.5 : 0;
+        if (signalPoliceBeaconR) signalPoliceBeaconR.intensity = flash ? 0 : 2.5;
+      }
+
+      if (doctorRightArm && STATE.ambulance.distanceMeters <= HOSPITAL_Z + 10) {
+        doctorRightArm.rotation.x = Math.sin(simulationClock.getElapsedTime() * 6) * 0.45 - 0.4;
+      }
+
+      civilianCars.forEach(car => {
+        if (car.userData.pulledOver) {
+          const targetX = car.userData.lane === 'LEFT' ? -6.8 : 6.8;
+          const targetRotY = car.userData.lane === 'LEFT' ? -Math.PI / 4 : Math.PI / 4;
+          car.position.x += (targetX - car.position.x) * 0.08;
+          car.rotation.y += (targetRotY - car.rotation.y) * 0.08;
+        }
+      });
+
+      if (ambulanceMesh) {
+        ambulanceMesh.position.z = STATE.ambulance.distanceMeters;
+      }
+
+      updateCameraDirector();
+
+      if (controls) controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // CAMERA DIRECTOR & VIEW MODES
+    function setCameraMode(mode) {
+      STATE.cameraMode = mode;
+      const modes = ['CRASH_SCENE', 'CHASE', 'PROTEST', 'SCHOOL', 'SIGNAL', 'HOSPITAL'];
+      const btnMap = {
+        'CRASH_SCENE': 'camCrashBtn',
+        'CHASE': 'camChaseBtn',
+        'PROTEST': 'camProtestBtn',
+        'SCHOOL': 'camSchoolBtn',
+        'SIGNAL': 'camSignalBtn',
+        'HOSPITAL': 'camHospitalBtn'
+      };
+      modes.forEach(m => {
+        const btn = document.getElementById(btnMap[m]);
+        if (btn) {
+          if (m === mode) {
+            btn.className = "px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition bg-cyan-600 text-white shadow-sm";
+          } else {
+            btn.className = "px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition text-slate-400 hover:text-white hover:bg-slate-800";
+          }
+        }
+      });
+      updateCameraDirector();
+    }
+
+    function updateCameraDirector() {
+      const ambZ = STATE.ambulance.distanceMeters;
+
+      if (STATE.cameraMode === 'CRASH_SCENE') {
+        camera.position.set(7.5, 3.6, CRASH_Z + 18);
+        if (controls) controls.target.set(1.5, 1.1, CRASH_Z + 9);
+        else camera.lookAt(1.5, 1.1, CRASH_Z + 9);
+      } else if (STATE.cameraMode === 'CHASE') {
+        camera.position.set(0, 7, ambZ + 18);
+        if (controls) controls.target.set(0, 2, ambZ - 25);
+        else camera.lookAt(0, 2, ambZ - 25);
+      } else if (STATE.cameraMode === 'PROTEST') {
+        camera.position.set(9.5, 4.5, PROTEST_Z + 12);
+        if (controls) controls.target.set(0, 1.8, PROTEST_Z);
+        else camera.lookAt(0, 1.8, PROTEST_Z);
+      } else if (STATE.cameraMode === 'SCHOOL') {
+        camera.position.set(10.5, 5.2, CROWD_Z + 12);
+        if (controls) controls.target.set(0, 1.5, CROWD_Z);
+        else camera.lookAt(0, 1.5, CROWD_Z);
+      } else if (STATE.cameraMode === 'SIGNAL') {
+        camera.position.set(8.5, 5.5, STOPLINE_Z + 16);
+        if (controls) controls.target.set(0, 3.5, STOPLINE_Z);
+        else camera.lookAt(0, 3.5, STOPLINE_Z);
+      } else if (STATE.cameraMode === 'HOSPITAL') {
+        camera.position.set(9.5, 4.2, HOSPITAL_Z + 14);
+        if (controls) controls.target.set(0, 2.5, HOSPITAL_Z - 5);
+        else camera.lookAt(0, 2.5, HOSPITAL_Z - 5);
+      }
+    }
+
+    function onScrubDistance(val) {
+      STATE.ambulance.distanceMeters = parseFloat(val);
+      if (ambulanceMesh) ambulanceMesh.position.z = STATE.ambulance.distanceMeters;
+      updateTraversalUI(STATE.ambulance.distanceMeters);
+    }
+
+    function updateTraversalUI(z) {
+      const distLabel = document.getElementById('sliderLabel');
+      const hudDist = document.getElementById('hudDistance');
+      let label = `${Math.round(z)}m`;
+      if (z >= 900) label += " (Crash Site)";
+      else if (z >= 680 && z <= 760) label += " (Political Protest)";
+      else if (z >= 440 && z <= 520) label += " (School & Market)";
+      else if (z >= -20 && z <= 20) label += " (Signal Stopline)";
+      else if (z <= -200) label += " (Hospital ER Bay)";
+
+      if (distLabel) distLabel.innerText = label;
+      if (hudDist) hudDist.innerText = `${Math.round(z)} m`;
+    }
+
+    // 24H ENVIRONMENT LIGHTING PRESETS
+    function setTimeOfDay(cycle) {
+      STATE.timeOfDay = cycle;
+      const bM = document.getElementById('btnMorning');
+      const bE = document.getElementById('btnEvening');
+      const bN = document.getElementById('btnNight');
+
+      [bM, bE, bN].forEach(b => {
+        if (b) b.className = "px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition text-slate-400 hover:text-white hover:bg-slate-800";
+      });
+
+      if (cycle === 'MORNING') {
+        if (bM) bM.className = "px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition bg-cyan-600 text-white shadow-sm";
+        scene.background.setHex(0x87ceeb);
+        scene.fog.color.setHex(0x87ceeb);
+        if (skyMesh) skyMesh.material.color.setHex(0x87ceeb);
+        dirLight.intensity = 1.4;
+        dirLight.color.setHex(0xfff7ed);
+        hemiLight.intensity = 0.7;
+      } else if (cycle === 'EVENING') {
+        if (bE) bE.className = "px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition bg-amber-600 text-white shadow-sm";
+        scene.background.setHex(0x271938);
+        scene.fog.color.setHex(0x271938);
+        if (skyMesh) skyMesh.material.color.setHex(0xf97316);
+        dirLight.intensity = 0.9;
+        dirLight.color.setHex(0xfb923c);
+        hemiLight.intensity = 0.5;
+      } else if (cycle === 'NIGHT') {
+        if (bN) bN.className = "px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition bg-indigo-600 text-white shadow-sm";
+        scene.background.setHex(0x050811);
+        scene.fog.color.setHex(0x050811);
+        if (skyMesh) skyMesh.material.color.setHex(0x090d16);
+        dirLight.intensity = 0.25;
+        dirLight.color.setHex(0x38bdf8);
+        hemiLight.intensity = 0.25;
+      }
+      logPoliceAudit(`[24H CYCLE] Lighting environment adjusted to ${cycle}.`);
+    }
+
+    function logPoliceAudit(msg) {
+      const audit = document.getElementById('auditLog');
+      if (!audit) return;
+      const el = document.createElement('div');
+      const timeStr = new Date().toLocaleTimeString();
+      el.innerText = `[${timeStr}] ${msg}`;
+      audit.appendChild(el);
+      audit.scrollTop = audit.scrollHeight;
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('webglCanvas');
+      if (!container || !renderer || !camera) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // RESET HANDLER
+    function resetSimulation() {
+      STATE.ambulance.distanceMeters = CRASH_Z;
+      STATE.ambulance.speedKmh = 0;
+      STATE.ambulance.sirenActive = false;
+      STATE.ambulance.patientLoaded = false;
+      STATE.ambulance.organLoaded = false;
+      STATE.cob.linkSent = false;
+      STATE.cob.linkApproved = false;
+      STATE.cob.marshalsActive = false;
+      STATE.gates.protestCleared = false;
+      STATE.gates.crowdCleared = false;
+      STATE.gates.signalAuthorized = false;
+      STATE.signal.state = 'RED';
+      USER_GATE.isManualDriving = false;
+
+      stopSirenSound();
+
+      if (ambulanceMesh) ambulanceMesh.position.set(0, 0, CRASH_Z);
+      if (pedestrianVictim) {
+        pedestrianVictim.position.set(-1.5, 0, CRASH_Z + 10);
+        pedestrianVictim.rotation.set(0, Math.PI / 2, 0);
+        pedestrianVictim.visible = true;
+      }
+      if (supinePatientMesh) supinePatientMesh.visible = false;
+      if (paramedicGurneyMesh) {
+        paramedicGurneyMesh.position.set(4.2, 0, CRASH_Z + 7);
+        paramedicGurneyMesh.visible = true;
+      }
+      if (crashCivilianCar) {
+        crashCivilianCar.position.set(2.2, 0, CRASH_Z + 38);
+        crashCivilianCar.rotation.set(0, 0, 0);
+      }
+
+      protestCrowdGroup.forEach(dem => {
+        dem.position.x = dem.userData.origX;
+      });
+      schoolCrowdGroup.forEach(person => {
+        person.position.x = person.userData.origX;
+      });
+      civilianCars.forEach(car => {
+        car.userData.pulledOver = false;
+        car.position.x = car.userData.origX;
+        car.rotation.y = 0;
+      });
+      cobMarshalsSquad.forEach(m => {
+        m.visible = false;
+      });
+
+      const sBanner = document.getElementById('signalPoliceBanner');
+      if (sBanner) sBanner.classList.add('hidden');
+      const lBanner = document.getElementById('hospitalLinkAlertBanner');
+      if (lBanner) lBanner.classList.add('hidden');
+      const cModal = document.getElementById('conclusionModal');
+      if (cModal) cModal.classList.add('hidden');
+      const pModal = document.getElementById('policeTabletModal');
+      if (pModal) pModal.classList.add('hidden');
+
+      if (signalPoliceOfficerMesh && signalPoliceOfficerMesh.userData.tabletScreen) {
+        signalPoliceOfficerMesh.userData.tabletScreen.material.color.setHex(0x38bdf8);
+      }
+
+      const hudPolice = document.getElementById('hudPoliceStatus');
+      if (hudPolice) {
+        hudPolice.innerText = "AWAITING TOKEN SCAN";
+        hudPolice.className = "font-extrabold text-amber-400";
+      }
+
+      const btnGateSig = document.getElementById('btnGateSignal');
+      if (btnGateSig) {
+        btnGateSig.innerText = "Inspect Link";
+        btnGateSig.className = "px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-md shadow-cyan-600/30";
+      }
+
+      const statGateSig = document.getElementById('gateSignalStatus');
+      if (statGateSig) {
+        statGateSig.innerText = "Officer inspecting digital link";
+        statGateSig.className = "text-[11px] text-amber-400 font-mono font-semibold";
+      }
+
+      STATE.hospitalSequence.speechSpoken = false;
+      STATE.hospitalSequence.modalTriggered = false;
+
+      updateSignalDisplay();
+      updateTraversalUI(CRASH_Z);
+      setCameraMode('CRASH_SCENE');
+      logPoliceAudit('[RESET] Simulation reset. Ambulance in standby mode.');
+    }
+
+    // INITIALIZATION ON WINDOW LOAD
+    window.onload = function() {
+      initThreeEngine();
+      animateLoop();
+    };
+  </script>
+</body>
+</html>
